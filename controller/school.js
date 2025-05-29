@@ -42,22 +42,26 @@ exports.listSchools = async (req, res) => {
   let { latitude, longitude } = req.query;
 
   try {
+    const [rows] = await db.execute('SELECT * FROM schools');
+    
     if (latitude && longitude) {
-      latitude = roundToThreeDecimals(latitude);
-      longitude = roundToThreeDecimals(longitude);
+      latitude = roundToThreeDecimals(parseFloat(latitude));
+      longitude = roundToThreeDecimals(parseFloat(longitude));
       
-      const [rows] = await db.execute(
-        'SELECT * FROM schools WHERE latitude = ? AND longitude = ?',
-        [latitude, longitude]
-      );
+      const schoolsWithDistance = rows.map(school => {
+        const distance = getDistance(
+          latitude, 
+          longitude, 
+          school.latitude, 
+          school.longitude
+        );
+        return { ...school, distance: roundToThreeDecimals(distance) };
+      });
       
-      if (rows.length === 0) {
-        return res.status(404).json({ message: 'No school found at these coordinates.' });
-      }
+      schoolsWithDistance.sort((a, b) => a.distance - b.distance);
       
-      res.json(rows);
+      res.json(schoolsWithDistance);
     } else {
-      const [rows] = await db.execute('SELECT * FROM schools');
       res.json(rows);
     }
   } catch (err) {

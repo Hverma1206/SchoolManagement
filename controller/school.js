@@ -1,9 +1,12 @@
 const db = require('../db');
 
-// Haversine formula
+function roundToThreeDecimals(num) {
+  return parseFloat(parseFloat(num).toFixed(3));
+}
+
 function getDistance(lat1, lon1, lat2, lon2) {
   const toRad = (value) => (value * Math.PI) / 180;
-  const R = 6371; // km
+  const R = 6371;
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
   const a =
@@ -13,12 +16,16 @@ function getDistance(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-// Add school
 exports.addSchool = async (req, res) => {
-  const { name, address, latitude, longitude } = req.body;
+  const { name, address } = req.body;
+  let { latitude, longitude } = req.body;
+  
   if (!name || !address || !latitude || !longitude) {
     return res.status(400).json({ message: 'All fields are required.' });
   }
+  
+  latitude = roundToThreeDecimals(latitude);
+  longitude = roundToThreeDecimals(longitude);
 
   try {
     await db.execute(
@@ -31,27 +38,28 @@ exports.addSchool = async (req, res) => {
   }
 };
 
-// List schools by proximity
 exports.listSchools = async (req, res) => {
-  const { latitude, longitude } = req.query;
-
-  if (!latitude || !longitude) {
-    return res.status(400).json({ message: 'Latitude and longitude are required.' });
-  }
+  let { latitude, longitude } = req.query;
 
   try {
-    const [rows] = await db.execute('SELECT * FROM schools');
-    const sorted = rows.map((school) => ({
-      ...school,
-      distance: getDistance(
-        parseFloat(latitude),
-        parseFloat(longitude),
-        school.latitude,
-        school.longitude
-      ),
-    })).sort((a, b) => a.distance - b.distance);
-
-    res.json(sorted);
+    if (latitude && longitude) {
+      latitude = roundToThreeDecimals(latitude);
+      longitude = roundToThreeDecimals(longitude);
+      
+      const [rows] = await db.execute(
+        'SELECT * FROM schools WHERE latitude = ? AND longitude = ?',
+        [latitude, longitude]
+      );
+      
+      if (rows.length === 0) {
+        return res.status(404).json({ message: 'No school found at these coordinates.' });
+      }
+      
+      res.json(rows);
+    } else {
+      const [rows] = await db.execute('SELECT * FROM schools');
+      res.json(rows);
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
